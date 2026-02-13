@@ -81,6 +81,7 @@ const healthEl = document.getElementById('health');
 const enemyCountEl = document.getElementById('enemy-count');
 const statusEl = document.getElementById('status');
 const gameOverEl = document.getElementById('game-over');
+const restartButtonEl = document.getElementById('restart-button');
 
 const keys = new Set();
 const bullets = [];
@@ -96,7 +97,8 @@ const velocity = new THREE.Vector3();
 let yaw = Math.PI;
 let pitch = 0;
 let score = 0;
-let health = 100;
+const START_HEALTH = 100;
+let health = START_HEALTH;
 let lastShot = 0;
 let gameOver = false;
 let damageCooldown = 0;
@@ -117,7 +119,7 @@ function setStatus(text) {
 
 function endGame() {
   gameOver = true;
-  setStatus('ゲームオーバー: Spaceでリスタート');
+  setStatus('ゲームオーバー: 画面のリスタートボタンを押してください');
   gameOverEl.hidden = false;
   document.body.classList.add('game-over');
   if (document.pointerLockElement === renderer.domElement) document.exitPointerLock();
@@ -198,9 +200,12 @@ function handleShoot() {
 
 document.addEventListener('keydown', (event) => {
   keys.add(event.code);
-  if (event.code === 'Space' && gameOver) window.location.reload();
 });
 document.addEventListener('keyup', (event) => keys.delete(event.code));
+
+restartButtonEl?.addEventListener('click', () => {
+  window.location.reload();
+});
 
 document.body.addEventListener('click', () => {
   if (!gameOver) renderer.domElement.requestPointerLock();
@@ -401,6 +406,8 @@ window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
+gameOverEl.hidden = true;
+health = START_HEALTH;
 setStatus('明るい市街地ステージ: クリックで開始');
 updateHud();
 requestAnimationFrame(animate);
