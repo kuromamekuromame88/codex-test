@@ -103,6 +103,9 @@ let lastShot = 0;
 let gameOver = false;
 let isPaused = true;
 let damageCooldown = 0;
+let verticalVelocity = 0;
+let onGround = true;
+let jumpQueued = false;
 
 const worldLimit = 58;
 const player = {
@@ -111,6 +114,8 @@ const player = {
   gamepadLookSpeed: 2.8,
   shootCooldown: 0.14,
   radius: 0.8,
+  eyeHeight: 1.7,
+  jumpSpeed: 8.8,
   position: new THREE.Vector3(0, 1.7, 8)
 };
 
@@ -202,6 +207,7 @@ function handleShoot() {
 
 document.addEventListener('keydown', (event) => {
   keys.add(event.code);
+  if (event.code === 'Space') jumpQueued = true;
 });
 document.addEventListener('keyup', (event) => keys.delete(event.code));
 
@@ -258,12 +264,54 @@ function applyGamepad(delta, now) {
   const forward = getForwardVector();
   const right = new THREE.Vector3(forward.z, 0, -forward.x);
   velocity.addScaledVector(forward, -ly * player.moveSpeed * delta);
-  velocity.addScaledVector(right, -lx * player.moveSpeed * delta);
+  velocity.addScaledVector(right, lx * player.moveSpeed * delta);
 
   const shootPressed = pad.buttons[7]?.value > 0.5 || pad.buttons[5]?.pressed;
   if (shootPressed) {
     spawnBullet(now);
     handleShoot();
+  }
+
+  if (pad.buttons[0]?.pressed) jumpQueued = true;
+}
+
+function getSupportHeight(x, z, cameraY) {
+  let supportY = player.eyeHeight;
+
+  for (const structure of structures) {
+    const halfW = structure.geometry.parameters.width / 2 - 0.2;
+    const halfD = structure.geometry.parameters.depth / 2 - 0.2;
+    const top = structure.position.y + structure.geometry.parameters.height / 2;
+    const candidateY = top + player.eyeHeight;
+
+    if (
+      Math.abs(x - structure.position.x) <= halfW
+      && Math.abs(z - structure.position.z) <= halfD
+      && cameraY >= candidateY - 2.6
+      && candidateY > supportY
+    ) {
+      supportY = candidateY;
+    }
+  }
+
+  return supportY;
+}
+
+function updateVertical(delta) {
+  if (jumpQueued && onGround) {
+    verticalVelocity = player.jumpSpeed;
+    onGround = false;
+  }
+
+  jumpQueued = false;
+  verticalVelocity -= 18 * delta;
+  player.position.y += verticalVelocity * delta;
+
+  const supportY = getSupportHeight(player.position.x, player.position.z, player.position.y);
+  if (player.position.y <= supportY) {
+    player.position.y = supportY;
+    verticalVelocity = 0;
+    onGround = true;
   }
 }
 
@@ -301,6 +349,7 @@ function updateMovement(delta) {
   player.position.z = THREE.MathUtils.clamp(player.position.z, -worldLimit, worldLimit);
 
   resolvePlayerVsStructures();
+  updateVertical(delta);
 
   camera.position.copy(player.position);
   camera.rotation.set(pitch, yaw, 0, 'YXZ');
@@ -414,6 +463,10 @@ gameOverEl.classList.remove('visible');
 gameOverEl.setAttribute('aria-hidden', 'true');
 health = START_HEALTH;
 isPaused = true;
+verticalVelocity = 0;
+onGround = true;
+jumpQueued = false;
+player.position.y = player.eyeHeight;
 setStatus('開始待機中: 画面をクリックして開始');
 updateHud();
 requestAnimationFrame(animate);
