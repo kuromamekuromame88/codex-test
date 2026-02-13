@@ -207,7 +207,10 @@ function handleShoot() {
 
 document.addEventListener('keydown', (event) => {
   keys.add(event.code);
-  if (event.code === 'Space') jumpQueued = true;
+  if (event.code === 'Space') {
+    event.preventDefault();
+    jumpQueued = true;
+  }
 });
 document.addEventListener('keyup', (event) => keys.delete(event.code));
 
@@ -298,6 +301,8 @@ function getSupportHeight(x, z, cameraY) {
 }
 
 function updateVertical(delta) {
+  if (keys.has('Space')) jumpQueued = true;
+
   if (jumpQueued && onGround) {
     verticalVelocity = player.jumpSpeed;
     onGround = false;
