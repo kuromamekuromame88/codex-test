@@ -70,9 +70,10 @@ h1 {
   position: fixed;
   inset: 0;
   z-index: 10;
-  display: grid;
+  display: none;
   place-items: center;
   background: rgba(0, 0, 0, 0.55);
+  pointer-events: none;
 }
 
 #game-over .panel {
@@ -91,8 +92,9 @@ h1 {
 }
 
 
-#game-over[hidden] {
-  display: none;
+#game-over.visible {
+  display: grid;
+  pointer-events: auto;
 }
 
 #restart-button {

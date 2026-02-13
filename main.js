@@ -120,7 +120,8 @@ function setStatus(text) {
 function endGame() {
   gameOver = true;
   setStatus('ゲームオーバー: 画面のリスタートボタンを押してください');
-  gameOverEl.hidden = false;
+  gameOverEl.classList.add('visible');
+  gameOverEl.setAttribute('aria-hidden', 'false');
   document.body.classList.add('game-over');
   if (document.pointerLockElement === renderer.domElement) document.exitPointerLock();
 }
@@ -207,11 +208,10 @@ restartButtonEl?.addEventListener('click', () => {
   window.location.reload();
 });
 
-document.body.addEventListener('click', () => {
-  if (!gameOver) renderer.domElement.requestPointerLock();
-  if (document.pointerLockElement === renderer.domElement) {
-    spawnBullet(performance.now() / 1000);
-    handleShoot();
+renderer.domElement.addEventListener('click', () => {
+  if (gameOver) return;
+  if (document.pointerLockElement !== renderer.domElement) {
+    renderer.domElement.requestPointerLock();
   }
 });
 
@@ -406,7 +406,8 @@ window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-gameOverEl.hidden = true;
+gameOverEl.classList.remove('visible');
+gameOverEl.setAttribute('aria-hidden', 'true');
 health = START_HEALTH;
 setStatus('明るい市街地ステージ: クリックで開始');
 updateHud();
