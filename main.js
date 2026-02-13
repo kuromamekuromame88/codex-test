@@ -101,6 +101,7 @@ const START_HEALTH = 100;
 let health = START_HEALTH;
 let lastShot = 0;
 let gameOver = false;
+let isPaused = true;
 let damageCooldown = 0;
 
 const worldLimit = 58;
@@ -224,11 +225,14 @@ document.addEventListener('mousedown', (event) => {
 
 document.addEventListener('pointerlockchange', () => {
   if (gameOver) return;
-  setStatus(
-    document.pointerLockElement === renderer.domElement
-      ? '戦闘中: 敵を狙って撃破しよう'
-      : '画面をクリックしてポインターロックを有効化してください。'
-  );
+
+  if (document.pointerLockElement === renderer.domElement) {
+    isPaused = false;
+    setStatus('戦闘中: 敵を狙って撃破しよう');
+  } else {
+    isPaused = true;
+    setStatus('一時停止中: 画面をクリックして再開');
+  }
 });
 
 document.addEventListener('mousemove', (event) => {
@@ -254,7 +258,7 @@ function applyGamepad(delta, now) {
   const forward = getForwardVector();
   const right = new THREE.Vector3(forward.z, 0, -forward.x);
   velocity.addScaledVector(forward, -ly * player.moveSpeed * delta);
-  velocity.addScaledVector(right, lx * player.moveSpeed * delta);
+  velocity.addScaledVector(right, -lx * player.moveSpeed * delta);
 
   const shootPressed = pad.buttons[7]?.value > 0.5 || pad.buttons[5]?.pressed;
   if (shootPressed) {
@@ -388,7 +392,7 @@ function animate(nowMs) {
   const delta = Math.min(0.033, (nowMs - prev) / 1000);
   prev = nowMs;
 
-  if (!gameOver) {
+  if (!gameOver && !isPaused) {
     applyGamepad(delta, now);
     updateMovement(delta);
     updateBullets(delta);
@@ -409,6 +413,7 @@ window.addEventListener('resize', () => {
 gameOverEl.classList.remove('visible');
 gameOverEl.setAttribute('aria-hidden', 'true');
 health = START_HEALTH;
-setStatus('明るい市街地ステージ: クリックで開始');
+isPaused = true;
+setStatus('開始待機中: 画面をクリックして開始');
 updateHud();
 requestAnimationFrame(animate);
