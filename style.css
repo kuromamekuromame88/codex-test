@@ -24,7 +24,7 @@ canvas {
   width: 100%;
   padding: 1rem;
   color: #0f172a;
-  text-shadow: 0 1px 2px rgba(255,255,255,0.6);
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.6);
   pointer-events: none;
   z-index: 2;
 }
@@ -64,4 +64,32 @@ h1 {
   box-shadow: 0 0 8px rgba(255, 255, 255, 0.6);
   z-index: 3;
   pointer-events: none;
+}
+
+#game-over {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+#game-over .panel {
+  background: rgba(15, 23, 42, 0.9);
+  color: #f8fafc;
+  border: 1px solid #93c5fd;
+  border-radius: 12px;
+  padding: 1.4rem 1.6rem;
+  text-align: center;
+  min-width: 280px;
+}
+
+#game-over h2 {
+  margin: 0 0 0.4rem;
+  color: #f87171;
+}
+
+body.game-over #crosshair {
+  display: none;
 }

@@ -15,11 +15,20 @@
       </p>
       <div id="stats">
         <span>Score: <strong id="score">0</strong></span>
-        <span>Health: <strong id="health">100</strong></span>
+        <span>Life: <strong id="health">100</strong></span>
         <span>Enemies: <strong id="enemy-count">0</strong></span>
       </div>
       <p id="status">画面をクリックしてポインターロックを有効化してください。</p>
     </div>
+
+    <div id="game-over" aria-live="polite" hidden>
+      <div class="panel">
+        <h2>GAME OVER</h2>
+        <p>敵の攻撃でライフが0になりました。</p>
+        <p>Spaceキーでリスタート</p>
+      </div>
+    </div>
+
     <div id="crosshair" aria-hidden="true"></div>
 
     <script type="module" src="./main.js"></script>

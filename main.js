@@ -10,10 +10,9 @@ camera.position.set(0, 1.7, 8);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-document.body.appendChild(renderer.domElement);
-
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.appendChild(renderer.domElement);
 
 const ambient = new THREE.AmbientLight(0xffffff, 0.72);
 scene.add(ambient);
@@ -48,7 +47,6 @@ road.receiveShadow = true;
 scene.add(road);
 
 const structures = [];
-
 function addBoxStructure({ x, y, z, w, h, d, color }) {
   const mesh = new THREE.Mesh(
     new THREE.BoxGeometry(w, h, d),
@@ -61,49 +59,28 @@ function addBoxStructure({ x, y, z, w, h, d, color }) {
   structures.push(mesh);
 }
 
-const boundaryMaterial = 0xb6d1ff;
 [
   { x: 0, z: -62, w: 128, h: 14, d: 2 },
   { x: 0, z: 62, w: 128, h: 14, d: 2 },
   { x: -62, z: 0, w: 2, h: 14, d: 128 },
   { x: 62, z: 0, w: 2, h: 14, d: 128 }
-].forEach((wall) => {
-  addBoxStructure({
-    x: wall.x,
-    y: wall.h / 2,
-    z: wall.z,
-    w: wall.w,
-    h: wall.h,
-    d: wall.d,
-    color: boundaryMaterial
-  });
-});
+].forEach((wall) => addBoxStructure({ ...wall, y: wall.h / 2, color: 0xb6d1ff }));
 
 const buildingColors = [0xdbeafe, 0xbfdbfe, 0xc4b5fd, 0xddd6fe, 0xfef3c7];
-const buildingLayout = [
-  [-40, -40, 12, 20, 16],
-  [-22, -34, 11, 13, 13],
-  [32, -42, 14, 24, 16],
-  [45, -25, 10, 14, 14],
-  [-45, 35, 11, 22, 14],
-  [-25, 45, 13, 15, 18],
-  [24, 30, 12, 20, 13],
-  [40, 40, 11, 16, 16],
-  [0, -18, 10, 12, 12],
-  [0, 24, 10, 12, 12],
-  [-15, 0, 8, 10, 10],
-  [15, 0, 8, 10, 10]
-];
-
-for (const [x, z, h, w, d] of buildingLayout) {
+[
+  [-40, -40, 12, 20, 16], [-22, -34, 11, 13, 13], [32, -42, 14, 24, 16], [45, -25, 10, 14, 14],
+  [-45, 35, 11, 22, 14], [-25, 45, 13, 15, 18], [24, 30, 12, 20, 13], [40, 40, 11, 16, 16],
+  [0, -18, 10, 12, 12], [0, 24, 10, 12, 12], [-15, 0, 8, 10, 10], [15, 0, 8, 10, 10]
+].forEach(([x, z, h, w, d]) => {
   const color = buildingColors[Math.floor(Math.random() * buildingColors.length)];
   addBoxStructure({ x, y: h / 2, z, w, h, d, color });
-}
+});
 
 const scoreEl = document.getElementById('score');
 const healthEl = document.getElementById('health');
 const enemyCountEl = document.getElementById('enemy-count');
 const statusEl = document.getElementById('status');
+const gameOverEl = document.getElementById('game-over');
 
 const keys = new Set();
 const bullets = [];
@@ -122,6 +99,7 @@ let score = 0;
 let health = 100;
 let lastShot = 0;
 let gameOver = false;
+let damageCooldown = 0;
 
 const worldLimit = 58;
 const player = {
@@ -137,16 +115,21 @@ function setStatus(text) {
   statusEl.textContent = text;
 }
 
+function endGame() {
+  gameOver = true;
+  setStatus('ゲームオーバー: Spaceでリスタート');
+  gameOverEl.hidden = false;
+  document.body.classList.add('game-over');
+  if (document.pointerLockElement === renderer.domElement) document.exitPointerLock();
+}
+
 function randomSpawnPosition() {
   for (let attempt = 0; attempt < 80; attempt += 1) {
     const candidate = new THREE.Vector3((Math.random() - 0.5) * 96, 1.2, (Math.random() - 0.5) * 96);
     const blocked = structures.some((structure) => {
       const halfW = structure.geometry.parameters.width / 2 + 1.2;
       const halfD = structure.geometry.parameters.depth / 2 + 1.2;
-      return (
-        Math.abs(candidate.x - structure.position.x) < halfW
-        && Math.abs(candidate.z - structure.position.z) < halfD
-      );
+      return Math.abs(candidate.x - structure.position.x) < halfW && Math.abs(candidate.z - structure.position.z) < halfD;
     });
     if (!blocked && candidate.distanceTo(player.position) > 14) return candidate;
   }
@@ -165,7 +148,7 @@ function createEnemy() {
     speed: 2 + Math.random() * 1.5,
     hp: 2,
     wobble: Math.random() * Math.PI * 2,
-    attackCooldown: Math.random()
+    attackCooldown: Math.random() * 0.7
   };
   enemyPool.add(enemy);
   enemies.push(enemy);
@@ -179,6 +162,10 @@ function updateHud() {
   enemyCountEl.textContent = String(enemies.length);
 }
 
+function getForwardVector() {
+  return new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
+}
+
 function spawnBullet(now) {
   if (now - lastShot < player.shootCooldown || gameOver) return;
   lastShot = now;
@@ -189,10 +176,7 @@ function spawnBullet(now) {
     new THREE.MeshBasicMaterial({ color: 0xfff0a6 })
   );
   bullet.position.copy(camera.position).addScaledVector(direction, 0.75);
-  bullet.userData = {
-    velocity: direction.clone().multiplyScalar(72),
-    life: 1.3
-  };
+  bullet.userData = { velocity: direction.clone().multiplyScalar(72), life: 1.3 };
   bullets.push(bullet);
   scene.add(bullet);
 }
@@ -219,7 +203,7 @@ document.addEventListener('keydown', (event) => {
 document.addEventListener('keyup', (event) => keys.delete(event.code));
 
 document.body.addEventListener('click', () => {
-  renderer.domElement.requestPointerLock();
+  if (!gameOver) renderer.domElement.requestPointerLock();
   if (document.pointerLockElement === renderer.domElement) {
     spawnBullet(performance.now() / 1000);
     handleShoot();
@@ -227,18 +211,19 @@ document.body.addEventListener('click', () => {
 });
 
 document.addEventListener('mousedown', (event) => {
-  if (event.button !== 0 || document.pointerLockElement !== renderer.domElement) return;
+  if (event.button !== 0 || document.pointerLockElement !== renderer.domElement || gameOver) return;
   const now = performance.now() / 1000;
   spawnBullet(now);
   handleShoot();
 });
 
 document.addEventListener('pointerlockchange', () => {
-  if (document.pointerLockElement === renderer.domElement) {
-    setStatus('戦闘中: 敵を狙って撃破しよう');
-  } else {
-    setStatus('画面をクリックしてポインターロックを有効化してください。');
-  }
+  if (gameOver) return;
+  setStatus(
+    document.pointerLockElement === renderer.domElement
+      ? '戦闘中: 敵を狙って撃破しよう'
+      : '画面をクリックしてポインターロックを有効化してください。'
+  );
 });
 
 document.addEventListener('mousemove', (event) => {
@@ -249,8 +234,7 @@ document.addEventListener('mousemove', (event) => {
 });
 
 function applyGamepad(delta, now) {
-  const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
-  const pad = gamepads && gamepads[0];
+  const pad = navigator.getGamepads?.()[0];
   if (!pad) return;
 
   const lx = Math.abs(pad.axes[0]) > 0.15 ? pad.axes[0] : 0;
@@ -262,14 +246,10 @@ function applyGamepad(delta, now) {
   pitch -= ry * player.gamepadLookSpeed * delta;
   pitch = Math.max(-1.3, Math.min(1.3, pitch));
 
-  const moveForward = -ly;
-  const moveSide = lx;
-  if (Math.abs(moveForward) > 0 || Math.abs(moveSide) > 0) {
-    const forward = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
-    const right = new THREE.Vector3(forward.z, 0, -forward.x);
-    velocity.addScaledVector(forward, moveForward * player.moveSpeed * delta);
-    velocity.addScaledVector(right, moveSide * player.moveSpeed * delta);
-  }
+  const forward = getForwardVector();
+  const right = new THREE.Vector3(forward.z, 0, -forward.x);
+  velocity.addScaledVector(forward, -ly * player.moveSpeed * delta);
+  velocity.addScaledVector(right, lx * player.moveSpeed * delta);
 
   const shootPressed = pad.buttons[7]?.value > 0.5 || pad.buttons[5]?.pressed;
   if (shootPressed) {
@@ -288,25 +268,22 @@ function resolvePlayerVsStructures() {
     if (Math.abs(dx) < halfW && Math.abs(dz) < halfD) {
       const penX = halfW - Math.abs(dx);
       const penZ = halfD - Math.abs(dz);
-      if (penX < penZ) {
-        player.position.x += Math.sign(dx || 1) * penX;
-      } else {
-        player.position.z += Math.sign(dz || 1) * penZ;
-      }
+      if (penX < penZ) player.position.x += Math.sign(dx || 1) * penX;
+      else player.position.z += Math.sign(dz || 1) * penZ;
       velocity.multiplyScalar(0.6);
     }
   }
 }
 
 function updateMovement(delta) {
-  const forward = Number(keys.has('KeyW')) - Number(keys.has('KeyS'));
-  const strafe = Number(keys.has('KeyD')) - Number(keys.has('KeyA'));
+  const forwardInput = Number(keys.has('KeyW')) - Number(keys.has('KeyS'));
+  const strafeInput = Number(keys.has('KeyD')) - Number(keys.has('KeyA'));
 
-  if (forward || strafe) {
-    const fwd = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
-    const right = new THREE.Vector3(fwd.z, 0, -fwd.x);
-    velocity.addScaledVector(fwd, forward * player.moveSpeed * delta);
-    velocity.addScaledVector(right, strafe * player.moveSpeed * delta);
+  if (forwardInput || strafeInput) {
+    const forward = getForwardVector();
+    const right = new THREE.Vector3(forward.z, 0, -forward.x);
+    velocity.addScaledVector(forward, forwardInput * player.moveSpeed * delta);
+    velocity.addScaledVector(right, strafeInput * player.moveSpeed * delta);
   }
 
   velocity.multiplyScalar(0.82);
@@ -337,19 +314,33 @@ function updateBullets(delta) {
       );
     });
 
-    if (
-      bullet.userData.life <= 0
-      || hitStructure
-      || Math.abs(bullet.position.x) > 80
-      || Math.abs(bullet.position.z) > 80
-    ) {
+    if (bullet.userData.life <= 0 || hitStructure || Math.abs(bullet.position.x) > 80 || Math.abs(bullet.position.z) > 80) {
       scene.remove(bullet);
       bullets.splice(i, 1);
     }
   }
 }
 
+function separateEnemies() {
+  for (let i = 0; i < enemies.length; i += 1) {
+    for (let j = i + 1; j < enemies.length; j += 1) {
+      const a = enemies[i];
+      const b = enemies[j];
+      const diff = a.position.clone().sub(b.position);
+      const dist = diff.length();
+      const minDist = 1.2;
+      if (dist > 0.001 && dist < minDist) {
+        diff.normalize().multiplyScalar((minDist - dist) * 0.5);
+        a.position.add(diff);
+        b.position.sub(diff);
+      }
+    }
+  }
+}
+
 function updateEnemies(delta) {
+  if (damageCooldown > 0) damageCooldown -= delta;
+
   for (const enemy of enemies) {
     const toPlayer = player.position.clone().sub(enemy.position);
     const dist = toPlayer.length();
@@ -357,40 +348,33 @@ function updateEnemies(delta) {
     enemy.userData.wobble += delta * 6;
     enemy.position.y = 1.2 + Math.sin(enemy.userData.wobble) * 0.14;
 
-    if (dist > 1.9) {
+    if (dist > 2.1) {
       toPlayer.normalize();
       const nextPos = enemy.position.clone().addScaledVector(toPlayer, enemy.userData.speed * delta);
 
       const blocked = structures.some((structure) => {
         const halfW = structure.geometry.parameters.width / 2 + 0.75;
         const halfD = structure.geometry.parameters.depth / 2 + 0.75;
-        return (
-          Math.abs(nextPos.x - structure.position.x) < halfW
-          && Math.abs(nextPos.z - structure.position.z) < halfD
-        );
+        return Math.abs(nextPos.x - structure.position.x) < halfW && Math.abs(nextPos.z - structure.position.z) < halfD;
       });
 
-      if (!blocked) {
-        enemy.position.copy(nextPos);
-      } else {
-        const sidestep = new THREE.Vector3(-toPlayer.z, 0, toPlayer.x).multiplyScalar(enemy.userData.speed * delta);
-        enemy.position.add(sidestep);
-      }
+      if (!blocked) enemy.position.copy(nextPos);
+      else enemy.position.add(new THREE.Vector3(-toPlayer.z, 0, toPlayer.x).multiplyScalar(enemy.userData.speed * delta));
     } else {
       enemy.userData.attackCooldown -= delta;
-      if (enemy.userData.attackCooldown <= 0) {
-        health -= 7;
-        enemy.userData.attackCooldown = 0.9;
-        if (health <= 0 && !gameOver) {
-          gameOver = true;
-          setStatus('ゲームオーバー: Spaceでリスタート');
-        }
+      if (enemy.userData.attackCooldown <= 0 && damageCooldown <= 0) {
+        health -= 10;
+        damageCooldown = 0.35;
+        enemy.userData.attackCooldown = 0.7;
+        if (health <= 0 && !gameOver) endGame();
       }
     }
 
     enemy.lookAt(player.position.x, enemy.position.y, player.position.z);
     enemy.material.emissive.lerp(new THREE.Color(0x2d0707), 0.08);
   }
+
+  separateEnemies();
 }
 
 let prev = performance.now();
