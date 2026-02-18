@@ -115,3 +115,11 @@ h1 {
 body.game-over #crosshair {
   display: none;
 }
+
+
+body.aiming #crosshair {
+  width: 14px;
+  height: 14px;
+  border-color: rgba(103, 232, 249, 0.95);
+  box-shadow: 0 0 10px rgba(103, 232, 249, 0.75);
+}

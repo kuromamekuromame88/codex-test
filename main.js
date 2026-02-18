@@ -121,6 +121,12 @@ const START_HEALTH = 100;
 let health = START_HEALTH;
 let lastShot = 0;
 let gameOver = false;
+const BASE_FOV = 75;
+const AIM_FOV = 28;
+const BASE_LOOK_SPEED = 0.0022;
+const AIM_LOOK_SPEED = 0.0011;
+let isAiming = false;
+let mouseAimHeld = false;
 let isPaused = true;
 let damageCooldown = 0;
 let verticalVelocity = 0;
@@ -156,18 +162,27 @@ const lastShotByWeapon = { rifle: 0, beam: 0 };
 
 const worldLimit = 58;
 const player = {
-  moveSpeed: 17,
-  lookSpeed: 0.0022,
+  moveSpeed: 34,
+  lookSpeed: BASE_LOOK_SPEED,
   gamepadLookSpeed: 2.8,
   shootCooldown: 0.14,
   radius: 0.8,
   eyeHeight: 1.7,
-  jumpSpeed: 11.8,
+  jumpSpeed: 23.6,
   position: new THREE.Vector3(0, 1.7, 8)
 };
 
 function setStatus(text) {
   statusEl.textContent = text;
+}
+
+function setAiming(active) {
+  if (gameOver) {
+    isAiming = false;
+  } else {
+    isAiming = active;
+  }
+  document.body.classList.toggle('aiming', isAiming);
 }
 
 function endGame() {
@@ -176,6 +191,7 @@ function endGame() {
   gameOverEl.classList.add('visible');
   gameOverEl.setAttribute('aria-hidden', 'false');
   document.body.classList.add('game-over');
+  setAiming(false);
   if (document.pointerLockElement === renderer.domElement) document.exitPointerLock();
 }
 
@@ -390,6 +406,25 @@ document.addEventListener('mousedown', (event) => {
   fireCurrentWeapon(now);
 });
 
+document.addEventListener('contextmenu', (event) => {
+  if (document.pointerLockElement === renderer.domElement) event.preventDefault();
+});
+
+document.addEventListener('mousedown', (event) => {
+  if (event.button === 2 && document.pointerLockElement === renderer.domElement && !gameOver) {
+    event.preventDefault();
+    mouseAimHeld = true;
+    setAiming(true);
+  }
+});
+
+document.addEventListener('mouseup', (event) => {
+  if (event.button === 2) {
+    mouseAimHeld = false;
+    setAiming(false);
+  }
+});
+
 document.addEventListener('pointerlockchange', () => {
   if (gameOver) return;
 
@@ -398,14 +433,16 @@ document.addEventListener('pointerlockchange', () => {
     setStatus('戦闘中: 敵を狙って撃破しよう');
   } else {
     isPaused = true;
+    setAiming(false);
     setStatus('一時停止中: 画面をクリックして再開');
   }
 });
 
 document.addEventListener('mousemove', (event) => {
   if (document.pointerLockElement !== renderer.domElement || gameOver) return;
-  yaw -= event.movementX * player.lookSpeed;
-  pitch -= event.movementY * player.lookSpeed;
+  const lookSpeed = isAiming ? AIM_LOOK_SPEED : player.lookSpeed;
+  yaw -= event.movementX * lookSpeed;
+  pitch -= event.movementY * lookSpeed;
   pitch = Math.max(-1.3, Math.min(1.3, pitch));
 });
 
@@ -418,8 +455,13 @@ function applyGamepad(delta, now) {
   const rx = Math.abs(pad.axes[2]) > 0.15 ? pad.axes[2] : 0;
   const ry = Math.abs(pad.axes[3]) > 0.15 ? pad.axes[3] : 0;
 
-  yaw -= rx * player.gamepadLookSpeed * delta;
-  pitch -= ry * player.gamepadLookSpeed * delta;
+  const aimingWithPad = pad.buttons[6]?.value > 0.4;
+  const shouldAim = aimingWithPad || mouseAimHeld;
+  setAiming(shouldAim && document.pointerLockElement === renderer.domElement);
+
+  const lookScale = isAiming ? 0.45 : 1;
+  yaw -= rx * player.gamepadLookSpeed * delta * lookScale;
+  pitch -= ry * player.gamepadLookSpeed * delta * lookScale;
   pitch = Math.max(-1.3, Math.min(1.3, pitch));
 
   const forward = getForwardVector();
@@ -723,6 +765,10 @@ function animate(nowMs) {
     updateEnemies(delta);
   }
 
+  const targetFov = isAiming ? AIM_FOV : BASE_FOV;
+  camera.fov = THREE.MathUtils.lerp(camera.fov, targetFov, 0.2);
+  camera.updateProjectionMatrix();
+
   updateHud();
   renderer.render(scene, camera);
   requestAnimationFrame(animate);
@@ -741,6 +787,9 @@ isPaused = true;
 verticalVelocity = 0;
 onGround = true;
 jumpQueued = false;
+setAiming(false);
+camera.fov = BASE_FOV;
+camera.updateProjectionMatrix();
 player.position.y = player.eyeHeight;
 setStatus('開始待機中: 画面をクリックして開始');
 updateHud();
