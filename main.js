@@ -91,6 +91,7 @@ const jumpPlatformColor = 0xf4a261;
 const scoreEl = document.getElementById('score');
 const healthEl = document.getElementById('health');
 const enemyCountEl = document.getElementById('enemy-count');
+const weaponNameEl = document.getElementById('weapon-name');
 const statusEl = document.getElementById('status');
 const gameOverEl = document.getElementById('game-over');
 const restartButtonEl = document.getElementById('restart-button');
@@ -119,6 +120,33 @@ let damageCooldown = 0;
 let verticalVelocity = 0;
 let onGround = true;
 let jumpQueued = false;
+let weaponSwitchLatched = false;
+
+const weapons = {
+  rifle: {
+    label: 'Rifle',
+    cooldown: 0.14,
+    damage: 1,
+    bulletSpeed: 72,
+    bulletLife: 1.3,
+    bulletSize: 0.08,
+    bulletColor: 0xfff0a6,
+    maxHits: 1
+  },
+  beam: {
+    label: 'Beam',
+    cooldown: 0.36,
+    damage: 2,
+    bulletSpeed: 110,
+    bulletLife: 0.7,
+    bulletSize: 0.12,
+    bulletColor: 0x67e8f9,
+    maxHits: 3
+  }
+};
+const weaponOrder = ['rifle', 'beam'];
+let currentWeapon = 'rifle';
+const lastShotByWeapon = { rifle: 0, beam: 0 };
 
 const worldLimit = 58;
 const player = {
@@ -188,6 +216,20 @@ function updateHud() {
   scoreEl.textContent = String(score);
   healthEl.textContent = String(Math.max(0, Math.floor(health)));
   enemyCountEl.textContent = String(enemies.length);
+  if (weaponNameEl) weaponNameEl.textContent = weapons[currentWeapon].label;
+}
+
+function setWeapon(weaponKey) {
+  if (!weapons[weaponKey] || currentWeapon === weaponKey) return;
+  currentWeapon = weaponKey;
+  setStatus(`武器切替: ${weapons[weaponKey].label}`);
+  updateHud();
+}
+
+function cycleWeapon(step) {
+  const idx = weaponOrder.indexOf(currentWeapon);
+  const next = (idx + step + weaponOrder.length) % weaponOrder.length;
+  setWeapon(weaponOrder[next]);
 }
 
 function getForwardVector() {
@@ -198,27 +240,8 @@ function getRightVector(forward) {
   return new THREE.Vector3(-forward.z, 0, forward.x);
 }
 
-function spawnBullet(now) {
-  if (now - lastShot < player.shootCooldown || gameOver) return;
-  lastShot = now;
-
-  direction.set(0, 0, -1).applyQuaternion(camera.quaternion).normalize();
-  const bullet = new THREE.Mesh(
-    new THREE.SphereGeometry(0.08, 8, 8),
-    new THREE.MeshBasicMaterial({ color: 0xfff0a6 })
-  );
-  bullet.position.copy(camera.position).addScaledVector(direction, 0.75);
-  bullet.userData = { velocity: direction.clone().multiplyScalar(72), life: 1.3 };
-  bullets.push(bullet);
-  scene.add(bullet);
-}
-
-function handleShoot() {
-  raycaster.setFromCamera(pointer, camera);
-  const hits = raycaster.intersectObjects(enemies);
-  if (!hits.length) return;
-  const enemy = hits[0].object;
-  enemy.userData.hp -= 1;
+function damageEnemy(enemy, damage) {
+  enemy.userData.hp -= damage;
   enemy.material.emissive.setHex(0x8b0000);
   if (enemy.userData.hp <= 0) {
     score += 10;
@@ -228,12 +251,49 @@ function handleShoot() {
   }
 }
 
+function spawnBullet(now, weapon) {
+  if (gameOver) return false;
+  if (now - lastShotByWeapon[currentWeapon] < weapon.cooldown) return false;
+  lastShotByWeapon[currentWeapon] = now;
+  lastShot = now;
+
+  direction.set(0, 0, -1).applyQuaternion(camera.quaternion).normalize();
+  const bullet = new THREE.Mesh(
+    new THREE.SphereGeometry(weapon.bulletSize, 10, 10),
+    new THREE.MeshBasicMaterial({ color: weapon.bulletColor })
+  );
+  bullet.position.copy(camera.position).addScaledVector(direction, 0.75);
+  bullet.userData = { velocity: direction.clone().multiplyScalar(weapon.bulletSpeed), life: weapon.bulletLife };
+  bullets.push(bullet);
+  scene.add(bullet);
+  return true;
+}
+
+function handleShoot(weapon) {
+  raycaster.setFromCamera(pointer, camera);
+  const hits = raycaster.intersectObjects(enemies);
+  if (!hits.length) return;
+
+  const maxHits = Math.max(1, weapon.maxHits || 1);
+  for (let i = 0; i < Math.min(maxHits, hits.length); i += 1) {
+    damageEnemy(hits[i].object, weapon.damage);
+  }
+}
+
+function fireCurrentWeapon(now) {
+  const weapon = weapons[currentWeapon];
+  const didSpawn = spawnBullet(now, weapon);
+  if (didSpawn) handleShoot(weapon);
+}
+
 document.addEventListener('keydown', (event) => {
   keys.add(event.code);
   if (event.code === 'Space') {
     event.preventDefault();
     jumpQueued = true;
   }
+  if (event.code === 'Digit1') setWeapon('rifle');
+  if (event.code === 'Digit2') setWeapon('beam');
 });
 document.addEventListener('keyup', (event) => keys.delete(event.code));
 
@@ -251,8 +311,7 @@ renderer.domElement.addEventListener('click', () => {
 document.addEventListener('mousedown', (event) => {
   if (event.button !== 0 || document.pointerLockElement !== renderer.domElement || gameOver) return;
   const now = performance.now() / 1000;
-  spawnBullet(now);
-  handleShoot();
+  fireCurrentWeapon(now);
 });
 
 document.addEventListener('pointerlockchange', () => {
@@ -293,10 +352,15 @@ function applyGamepad(delta, now) {
   velocity.addScaledVector(right, lx * player.moveSpeed * delta);
 
   const shootPressed = pad.buttons[7]?.value > 0.5 || pad.buttons[5]?.pressed;
-  if (shootPressed) {
-    spawnBullet(now);
-    handleShoot();
+  if (shootPressed) fireCurrentWeapon(now);
+
+  const switchLeft = pad.buttons[14]?.pressed;
+  const switchRight = pad.buttons[15]?.pressed;
+  if ((switchLeft || switchRight) && !weaponSwitchLatched) {
+    cycleWeapon(switchRight ? 1 : -1);
+    weaponSwitchLatched = true;
   }
+  if (!switchLeft && !switchRight) weaponSwitchLatched = false;
 
   if (pad.buttons[0]?.pressed) jumpQueued = true;
 }
