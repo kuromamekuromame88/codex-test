@@ -156,13 +156,13 @@ const lastShotByWeapon = { rifle: 0, beam: 0 };
 
 const worldLimit = 58;
 const player = {
-  moveSpeed: 13,
+  moveSpeed: 17,
   lookSpeed: 0.0022,
   gamepadLookSpeed: 2.8,
   shootCooldown: 0.14,
   radius: 0.8,
   eyeHeight: 1.7,
-  jumpSpeed: 8.8,
+  jumpSpeed: 11.8,
   position: new THREE.Vector3(0, 1.7, 8)
 };
 
@@ -211,27 +211,72 @@ function pickRangedSpawnPosition() {
 }
 
 function createEnemy(isRanged = false) {
-  const enemy = new THREE.Mesh(
-    new THREE.CapsuleGeometry(0.65, 1.2, 4, 10),
-    new THREE.MeshStandardMaterial({
-      color: isRanged ? 0x1d4ed8 : 0xdc2626,
-      emissive: isRanged ? 0x061634 : 0x2d0707,
-      roughness: 0.35
-    })
+  const enemy = new THREE.Group();
+
+  const palette = isRanged
+    ? { body: 0x3b82f6, detail: 0x93c5fd, emissive: 0x061634 }
+    : { body: 0xb91c1c, detail: 0xf87171, emissive: 0x2d0707 };
+
+  const bodyMaterial = new THREE.MeshStandardMaterial({
+    color: palette.body,
+    emissive: palette.emissive,
+    roughness: 0.52,
+    metalness: 0.18
+  });
+  const detailMaterial = new THREE.MeshStandardMaterial({
+    color: palette.detail,
+    roughness: 0.58,
+    metalness: 0.12
+  });
+
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.95, 1.1, 0.5), bodyMaterial);
+  torso.position.y = 1.35;
+
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.34, 20, 20), detailMaterial);
+  head.position.y = 2.18;
+
+  const leftArm = new THREE.Mesh(new THREE.CapsuleGeometry(0.12, 0.55, 4, 10), detailMaterial);
+  leftArm.position.set(-0.62, 1.38, 0);
+  leftArm.rotation.z = Math.PI / 18;
+
+  const rightArm = leftArm.clone();
+  rightArm.position.x = 0.62;
+  rightArm.rotation.z = -Math.PI / 18;
+
+  const leftLeg = new THREE.Mesh(new THREE.CapsuleGeometry(0.15, 0.65, 4, 10), detailMaterial);
+  leftLeg.position.set(-0.24, 0.56, 0);
+
+  const rightLeg = leftLeg.clone();
+  rightLeg.position.x = 0.24;
+
+  const visor = new THREE.Mesh(
+    new THREE.BoxGeometry(0.42, 0.16, 0.36),
+    new THREE.MeshStandardMaterial({ color: isRanged ? 0xbfdbfe : 0xfee2e2, emissive: 0x111111, roughness: 0.3, metalness: 0.45 })
   );
-  enemy.castShadow = true;
-  enemy.receiveShadow = true;
+  visor.position.set(0, 2.16, 0.18);
+
+  enemy.add(torso, head, leftArm, rightArm, leftLeg, rightLeg, visor);
+  enemy.traverse((child) => {
+    if (child.isMesh) {
+      child.castShadow = true;
+      child.receiveShadow = true;
+      child.userData.enemyRoot = enemy;
+    }
+  });
+
   enemy.position.copy(isRanged ? pickRangedSpawnPosition() : randomSpawnPosition());
   enemy.userData = {
-    speed: isRanged ? 1.8 + Math.random() * 1.1 : 2 + Math.random() * 1.5,
-    hp: isRanged ? 3 : 2,
+    speed: isRanged ? 2.2 + Math.random() * 1.2 : 2.6 + Math.random() * 1.7,
+    hp: isRanged ? 4 : 3,
     wobble: Math.random() * Math.PI * 2,
     attackCooldown: Math.random() * 0.7,
-    isRanged
+    isRanged,
+    coreMaterial: bodyMaterial
   };
   enemyPool.add(enemy);
   enemies.push(enemy);
 }
+
 
 const MELEE_ENEMY_COUNT = 14;
 const RANGED_ENEMY_COUNT = 2;
@@ -268,7 +313,7 @@ function getRightVector(forward) {
 
 function damageEnemy(enemy, damage) {
   enemy.userData.hp -= damage;
-  enemy.material.emissive.setHex(0x8b0000);
+  enemy.userData.coreMaterial?.emissive.setHex(0x8b0000);
   if (enemy.userData.hp <= 0) {
     score += 10;
     enemyPool.remove(enemy);
@@ -297,12 +342,17 @@ function spawnBullet(now, weapon) {
 
 function handleShoot(weapon) {
   raycaster.setFromCamera(pointer, camera);
-  const hits = raycaster.intersectObjects(enemies);
+  const hits = raycaster.intersectObjects(enemies, true);
   if (!hits.length) return;
 
   const maxHits = Math.max(1, weapon.maxHits || 1);
-  for (let i = 0; i < Math.min(maxHits, hits.length); i += 1) {
-    damageEnemy(hits[i].object, weapon.damage);
+  const affected = new Set();
+  for (let i = 0; i < hits.length && affected.size < maxHits; i += 1) {
+    const hitObject = hits[i].object;
+    const enemyRoot = hitObject.userData.enemyRoot || hitObject.parent;
+    if (!enemyRoot || affected.has(enemyRoot) || !enemies.includes(enemyRoot)) continue;
+    affected.add(enemyRoot);
+    damageEnemy(enemyRoot, weapon.damage);
   }
 }
 
@@ -611,7 +661,7 @@ function updateEnemies(delta) {
     const dist = toPlayer.length();
 
     enemy.userData.wobble += delta * 6;
-    enemy.position.y = 1.2 + Math.sin(enemy.userData.wobble) * 0.14;
+    enemy.position.y = 0.04 + Math.sin(enemy.userData.wobble) * 0.08;
 
     toPlayer.normalize();
 
@@ -643,7 +693,7 @@ function updateEnemies(delta) {
           new THREE.SphereGeometry(0.11, 10, 10),
           new THREE.MeshBasicMaterial({ color: 0x60a5fa })
         );
-        enemyBullet.position.copy(enemy.position).add(new THREE.Vector3(0, 0.5, 0)).addScaledVector(shotDir, 0.9);
+        enemyBullet.position.copy(enemy.position).add(new THREE.Vector3(0, 1.45, 0)).addScaledVector(shotDir, 0.9);
         enemyBullet.userData = { velocity: shotDir.multiplyScalar(30), life: 2.2 };
         enemyBullets.push(enemyBullet);
         scene.add(enemyBullet);
@@ -652,7 +702,7 @@ function updateEnemies(delta) {
     }
 
     enemy.lookAt(player.position.x, enemy.position.y, player.position.z);
-    enemy.material.emissive.lerp(new THREE.Color(enemy.userData.isRanged ? 0x061634 : 0x2d0707), 0.08);
+    enemy.userData.coreMaterial?.emissive.lerp(new THREE.Color(enemy.userData.isRanged ? 0x061634 : 0x2d0707), 0.08);
   }
 
   separateEnemies();
