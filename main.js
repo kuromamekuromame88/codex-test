@@ -83,7 +83,13 @@ const jumpPlatformColor = 0xf4a261;
   { x: -1, z: 14, w: 3.2, h: 3.1, d: 3.2 },
   { x: 3.5, z: 14, w: 3.2, h: 4.1, d: 3.2 },
   { x: 8, z: 14, w: 3.2, h: 5, d: 3.2 },
-  { x: 12.5, z: 14, w: 3.2, h: 6.1, d: 3.2 }
+  { x: 12.5, z: 14, w: 3.2, h: 6.1, d: 3.2 },
+  { x: -22, z: -8, w: 4.2, h: 2.2, d: 4.2 },
+  { x: -16.5, z: -8, w: 4.2, h: 3.2, d: 4.2 },
+  { x: -11, z: -8, w: 4.2, h: 4.2, d: 4.2 },
+  { x: 22, z: 6, w: 4.4, h: 2.8, d: 4.4 },
+  { x: 27, z: 6, w: 4.4, h: 3.9, d: 4.4 },
+  { x: 32, z: 6, w: 4.4, h: 5, d: 4.4 }
 ].forEach((platform) => {
   addBoxStructure({ ...platform, y: platform.h / 2, color: jumpPlatformColor });
 });
@@ -173,17 +179,35 @@ function endGame() {
   if (document.pointerLockElement === renderer.domElement) document.exitPointerLock();
 }
 
-function randomSpawnPosition() {
+function isPositionBlocked(position, margin = 1.2) {
+  return structures.some((structure) => {
+    const halfW = structure.geometry.parameters.width / 2 + margin;
+    const halfD = structure.geometry.parameters.depth / 2 + margin;
+    return Math.abs(position.x - structure.position.x) < halfW && Math.abs(position.z - structure.position.z) < halfD;
+  });
+}
+
+function randomSpawnPosition(minPlayerDistance = 14) {
   for (let attempt = 0; attempt < 80; attempt += 1) {
     const candidate = new THREE.Vector3((Math.random() - 0.5) * 96, 1.2, (Math.random() - 0.5) * 96);
-    const blocked = structures.some((structure) => {
-      const halfW = structure.geometry.parameters.width / 2 + 1.2;
-      const halfD = structure.geometry.parameters.depth / 2 + 1.2;
-      return Math.abs(candidate.x - structure.position.x) < halfW && Math.abs(candidate.z - structure.position.z) < halfD;
-    });
-    if (!blocked && candidate.distanceTo(player.position) > 14) return candidate;
+    if (!isPositionBlocked(candidate) && candidate.distanceTo(player.position) > minPlayerDistance) return candidate;
   }
   return new THREE.Vector3((Math.random() - 0.5) * 40, 1.2, (Math.random() - 0.5) * 40);
+}
+
+function pickRangedSpawnPosition() {
+  const preferredSpawns = [
+    new THREE.Vector3(-48, 1.2, -20),
+    new THREE.Vector3(48, 1.2, 20),
+    new THREE.Vector3(-44, 1.2, 34),
+    new THREE.Vector3(44, 1.2, -34)
+  ];
+
+  for (const candidate of preferredSpawns) {
+    if (!isPositionBlocked(candidate, 1.1) && candidate.distanceTo(player.position) > 16) return candidate.clone();
+  }
+
+  return randomSpawnPosition(16);
 }
 
 function createEnemy(isRanged = false) {
@@ -197,7 +221,7 @@ function createEnemy(isRanged = false) {
   );
   enemy.castShadow = true;
   enemy.receiveShadow = true;
-  enemy.position.copy(randomSpawnPosition());
+  enemy.position.copy(isRanged ? pickRangedSpawnPosition() : randomSpawnPosition());
   enemy.userData = {
     speed: isRanged ? 1.8 + Math.random() * 1.1 : 2 + Math.random() * 1.5,
     hp: isRanged ? 3 : 2,
@@ -209,8 +233,10 @@ function createEnemy(isRanged = false) {
   enemies.push(enemy);
 }
 
-for (let i = 0; i < 14; i += 1) createEnemy();
-for (let i = 0; i < 2; i += 1) createEnemy(true);
+const MELEE_ENEMY_COUNT = 14;
+const RANGED_ENEMY_COUNT = 2;
+for (let i = 0; i < MELEE_ENEMY_COUNT; i += 1) createEnemy();
+for (let i = 0; i < RANGED_ENEMY_COUNT; i += 1) createEnemy(true);
 
 function updateHud() {
   scoreEl.textContent = String(score);
@@ -532,6 +558,51 @@ function separateEnemies() {
   }
 }
 
+function moveEnemyWithCollision(enemy, movement) {
+  const proposed = enemy.position.clone().add(movement);
+
+  proposed.x = THREE.MathUtils.clamp(proposed.x, -worldLimit, worldLimit);
+  proposed.z = THREE.MathUtils.clamp(proposed.z, -worldLimit, worldLimit);
+
+  const enemyRadius = 0.72;
+
+  for (const structure of structures) {
+    const halfW = structure.geometry.parameters.width / 2 + enemyRadius;
+    const halfD = structure.geometry.parameters.depth / 2 + enemyRadius;
+
+    const dx = proposed.x - structure.position.x;
+    const dz = proposed.z - structure.position.z;
+    if (Math.abs(dx) < halfW && Math.abs(dz) < halfD) {
+      const penX = halfW - Math.abs(dx);
+      const penZ = halfD - Math.abs(dz);
+      if (penX < penZ) proposed.x += Math.sign(dx || 1) * penX;
+      else proposed.z += Math.sign(dz || 1) * penZ;
+    }
+  }
+
+  enemy.position.x = THREE.MathUtils.clamp(proposed.x, -worldLimit, worldLimit);
+  enemy.position.z = THREE.MathUtils.clamp(proposed.z, -worldLimit, worldLimit);
+}
+
+function ensureEnemyComposition() {
+  let rangedCount = 0;
+  let meleeCount = 0;
+  for (const enemy of enemies) {
+    if (enemy.userData.isRanged) rangedCount += 1;
+    else meleeCount += 1;
+  }
+
+  while (rangedCount < RANGED_ENEMY_COUNT) {
+    createEnemy(true);
+    rangedCount += 1;
+  }
+
+  while (meleeCount < MELEE_ENEMY_COUNT) {
+    createEnemy(false);
+    meleeCount += 1;
+  }
+}
+
 function updateEnemies(delta) {
   if (damageCooldown > 0) damageCooldown -= delta;
 
@@ -546,16 +617,8 @@ function updateEnemies(delta) {
 
     if (!enemy.userData.isRanged) {
       if (dist > 2.1) {
-        const nextPos = enemy.position.clone().addScaledVector(toPlayer, enemy.userData.speed * delta);
-
-        const blocked = structures.some((structure) => {
-          const halfW = structure.geometry.parameters.width / 2 + 0.75;
-          const halfD = structure.geometry.parameters.depth / 2 + 0.75;
-          return Math.abs(nextPos.x - structure.position.x) < halfW && Math.abs(nextPos.z - structure.position.z) < halfD;
-        });
-
-        if (!blocked) enemy.position.copy(nextPos);
-        else enemy.position.add(new THREE.Vector3(-toPlayer.z, 0, toPlayer.x).multiplyScalar(enemy.userData.speed * delta));
+        const movement = toPlayer.clone().multiplyScalar(enemy.userData.speed * delta);
+        moveEnemyWithCollision(enemy, movement);
       } else {
         enemy.userData.attackCooldown -= delta;
         if (enemy.userData.attackCooldown <= 0 && damageCooldown <= 0) {
@@ -568,9 +631,9 @@ function updateEnemies(delta) {
     } else {
       const idealRange = 13;
       if (dist < idealRange - 1.5) {
-        enemy.position.addScaledVector(toPlayer, -enemy.userData.speed * delta);
+        moveEnemyWithCollision(enemy, toPlayer.clone().multiplyScalar(-enemy.userData.speed * delta));
       } else if (dist > idealRange + 6) {
-        enemy.position.addScaledVector(toPlayer, enemy.userData.speed * delta * 0.9);
+        moveEnemyWithCollision(enemy, toPlayer.clone().multiplyScalar(enemy.userData.speed * delta * 0.9));
       }
 
       enemy.userData.attackCooldown -= delta;
@@ -588,13 +651,12 @@ function updateEnemies(delta) {
       }
     }
 
-    enemy.position.x = THREE.MathUtils.clamp(enemy.position.x, -worldLimit, worldLimit);
-    enemy.position.z = THREE.MathUtils.clamp(enemy.position.z, -worldLimit, worldLimit);
     enemy.lookAt(player.position.x, enemy.position.y, player.position.z);
     enemy.material.emissive.lerp(new THREE.Color(enemy.userData.isRanged ? 0x061634 : 0x2d0707), 0.08);
   }
 
   separateEnemies();
+  ensureEnemyComposition();
 }
 
 let prev = performance.now();
