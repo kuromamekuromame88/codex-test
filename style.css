@@ -1,0 +1,117 @@
+:root {
+  color-scheme: dark;
+  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  overflow: hidden;
+  background: radial-gradient(circle at center, #cfe9ff, #8ecbff 75%);
+}
+
+canvas {
+  display: block;
+}
+
+#hud {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  padding: 1rem;
+  color: #0f172a;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.6);
+  pointer-events: none;
+  z-index: 2;
+}
+
+h1 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+#instructions {
+  margin: 0.4rem 0;
+  opacity: 0.9;
+  line-height: 1.4;
+}
+
+#stats {
+  display: flex;
+  gap: 1rem;
+  font-size: 1rem;
+  margin-bottom: 0.4rem;
+}
+
+#status {
+  margin: 0;
+  color: #b45309;
+}
+
+#crosshair {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  width: 20px;
+  height: 20px;
+  transform: translate(-50%, -50%);
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.6);
+  z-index: 3;
+  pointer-events: none;
+}
+
+#game-over {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: none;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+}
+
+#game-over .panel {
+  background: rgba(15, 23, 42, 0.9);
+  color: #f8fafc;
+  border: 1px solid #93c5fd;
+  border-radius: 12px;
+  padding: 1.4rem 1.6rem;
+  text-align: center;
+  min-width: 280px;
+}
+
+#game-over h2 {
+  margin: 0 0 0.4rem;
+  color: #f87171;
+}
+
+
+#game-over.visible {
+  display: grid;
+  pointer-events: auto;
+}
+
+#restart-button {
+  margin-top: 0.8rem;
+  border: 0;
+  border-radius: 8px;
+  background: #2563eb;
+  color: #eff6ff;
+  padding: 0.55rem 0.9rem;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+#restart-button:hover {
+  background: #1d4ed8;
+}
+
+body.game-over #crosshair {
+  display: none;
+}

@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gamepad FPS Arena</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <div id="hud">
+      <h1>Gamepad FPS Arena</h1>
+      <p id="instructions">
+        クリックで開始 / マウスで照準 / 左クリックで射撃 / WASDで移動 / Spaceでジャンプ<br />
+        USBゲームパッド: 左スティック移動・右スティック照準・R2/RTで射撃・Aボタンでジャンプ
+      </p>
+      <div id="stats">
+        <span>Score: <strong id="score">0</strong></span>
+        <span>Life: <strong id="health">100</strong></span>
+        <span>Enemies: <strong id="enemy-count">0</strong></span>
+      </div>
+      <p id="status">画面をクリックしてポインターロックを有効化してください。</p>
+    </div>
+
+    <div id="game-over" aria-live="polite" aria-hidden="true">
+      <div class="panel">
+        <h2>GAME OVER</h2>
+        <p>敵の攻撃でライフが0になりました。</p>
+        <button id="restart-button" type="button">リスタート</button>
+      </div>
+    </div>
+
+    <div id="crosshair" aria-hidden="true"></div>
+
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>
