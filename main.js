@@ -242,15 +242,18 @@ function createEnemy(kind = 'melee') {
   const isRanged = kind === 'ranged';
   const isBoss = kind === 'boss';
   const isFlying = kind === 'flying';
+  const isSuicide = kind === 'suicide';
   const enemy = new THREE.Group();
 
   const palette = isBoss
     ? { body: 0x7c3aed, detail: 0xc4b5fd, emissive: 0x1a103f }
-    : isFlying
-      ? { body: 0x0f766e, detail: 0xa7f3d0, emissive: 0x042f2e }
-      : isRanged
-        ? { body: 0x3b82f6, detail: 0x93c5fd, emissive: 0x061634 }
-        : { body: 0xb91c1c, detail: 0xf87171, emissive: 0x2d0707 };
+    : isSuicide
+      ? { body: 0xf97316, detail: 0xfdba74, emissive: 0x3a1200 }
+      : isFlying
+        ? { body: 0x0f766e, detail: 0xa7f3d0, emissive: 0x042f2e }
+        : isRanged
+          ? { body: 0x3b82f6, detail: 0x93c5fd, emissive: 0x061634 }
+          : { body: 0xb91c1c, detail: 0xf87171, emissive: 0x2d0707 };
 
   const bodyMaterial = new THREE.MeshStandardMaterial({
     color: palette.body,
@@ -281,7 +284,7 @@ function createEnemy(kind = 'melee') {
   const visor = new THREE.Mesh(
     new THREE.BoxGeometry(0.42, 0.16, 0.36),
     new THREE.MeshStandardMaterial({
-      color: isBoss ? 0xe9d5ff : isFlying ? 0xccfbf1 : isRanged ? 0xbfdbfe : 0xfee2e2,
+      color: isBoss ? 0xe9d5ff : isSuicide ? 0xffedd5 : isFlying ? 0xccfbf1 : isRanged ? 0xbfdbfe : 0xfee2e2,
       emissive: 0x111111,
       roughness: 0.3,
       metalness: 0.45
@@ -307,6 +310,27 @@ function createEnemy(kind = 'melee') {
     enemy.add(rotorRing, core);
   }
 
+  if (isSuicide) {
+    const dangerCore = new THREE.Mesh(
+      new THREE.SphereGeometry(0.24, 12, 12),
+      new THREE.MeshStandardMaterial({ color: 0xffedd5, emissive: 0x6b2100, roughness: 0.25, metalness: 0.2 })
+    );
+    dangerCore.position.y = 2.46;
+    const spikeGeom = new THREE.ConeGeometry(0.11, 0.42, 8);
+    const spike1 = new THREE.Mesh(spikeGeom, detailMaterial);
+    const spike2 = new THREE.Mesh(spikeGeom, detailMaterial);
+    const spike3 = new THREE.Mesh(spikeGeom, detailMaterial);
+    spike1.position.set(0.36, 2.42, 0);
+    spike1.rotation.z = Math.PI / 2;
+    spike2.position.set(-0.2, 2.42, 0.3);
+    spike2.rotation.z = -Math.PI / 2.6;
+    spike2.rotation.x = Math.PI / 3;
+    spike3.position.set(-0.2, 2.42, -0.3);
+    spike3.rotation.z = -Math.PI / 2.6;
+    spike3.rotation.x = -Math.PI / 3;
+    enemy.add(dangerCore, spike1, spike2, spike3);
+  }
+
   enemy.traverse((child) => {
     if (child.isMesh) {
       child.castShadow = true;
@@ -317,24 +341,27 @@ function createEnemy(kind = 'melee') {
 
   const spawn = isBoss
     ? randomSpawnPosition(24)
-    : isFlying
-      ? randomSpawnPosition(20)
-      : isRanged
-        ? pickRangedSpawnPosition()
-        : randomSpawnPosition();
+    : isSuicide
+      ? randomSpawnPosition(18)
+      : isFlying
+        ? randomSpawnPosition(20)
+        : isRanged
+          ? pickRangedSpawnPosition()
+          : randomSpawnPosition();
   enemy.position.copy(spawn);
   enemy.userData = {
-    speed: isBoss ? 1.9 + Math.random() * 0.7 : isFlying ? 2.8 + Math.random() * 1.4 : isRanged ? 2.2 + Math.random() * 1.2 : 2.6 + Math.random() * 1.7,
-    hp: isBoss ? 26 : isFlying ? 6 : isRanged ? 4 : 3,
+    speed: isBoss ? 1.9 + Math.random() * 0.7 : isSuicide ? 9.5 + Math.random() * 2.8 : isFlying ? 2.8 + Math.random() * 1.4 : isRanged ? 2.2 + Math.random() * 1.2 : 2.6 + Math.random() * 1.7,
+    hp: isBoss ? 26 : isSuicide ? 5 : isFlying ? 6 : isRanged ? 4 : 3,
     wobble: Math.random() * Math.PI * 2,
     attackCooldown: Math.random() * 0.7,
     kind,
     isRanged,
     isBoss,
     isFlying,
-    baseY: isBoss ? 0.15 : isFlying ? 6.4 : 0.04,
-    bobAmp: isBoss ? 0.05 : isFlying ? 0.45 : 0.08,
-    collisionRadius: isBoss ? 1.35 : isFlying ? 0.9 : 0.72,
+    isSuicide,
+    baseY: isBoss ? 0.15 : isSuicide ? 7.1 : isFlying ? 6.4 : 0.04,
+    bobAmp: isBoss ? 0.05 : isSuicide ? 0.58 : isFlying ? 0.45 : 0.08,
+    collisionRadius: isBoss ? 1.35 : isSuicide ? 1.05 : isFlying ? 0.9 : 0.72,
     coreMaterial: bodyMaterial
   };
   enemyPool.add(enemy);
@@ -346,10 +373,12 @@ const MELEE_ENEMY_COUNT = 14;
 const RANGED_ENEMY_COUNT = 2;
 const BOSS_ENEMY_COUNT = 1;
 const FLYING_ENEMY_COUNT = 2;
+const SUICIDE_ENEMY_COUNT = 2;
 for (let i = 0; i < MELEE_ENEMY_COUNT; i += 1) createEnemy('melee');
 for (let i = 0; i < RANGED_ENEMY_COUNT; i += 1) createEnemy('ranged');
 for (let i = 0; i < BOSS_ENEMY_COUNT; i += 1) createEnemy('boss');
 for (let i = 0; i < FLYING_ENEMY_COUNT; i += 1) createEnemy('flying');
+for (let i = 0; i < SUICIDE_ENEMY_COUNT; i += 1) createEnemy('suicide');
 
 function updateHud() {
   scoreEl.textContent = String(score);
@@ -762,8 +791,10 @@ function ensureEnemyComposition() {
   let meleeCount = 0;
   let bossCount = 0;
   let flyingCount = 0;
+  let suicideCount = 0;
   for (const enemy of enemies) {
     if (enemy.userData.isBoss) bossCount += 1;
+    else if (enemy.userData.isSuicide) suicideCount += 1;
     else if (enemy.userData.isFlying) flyingCount += 1;
     else if (enemy.userData.isRanged) rangedCount += 1;
     else meleeCount += 1;
@@ -787,6 +818,11 @@ function ensureEnemyComposition() {
   while (flyingCount < FLYING_ENEMY_COUNT) {
     createEnemy('flying');
     flyingCount += 1;
+  }
+
+  while (suicideCount < SUICIDE_ENEMY_COUNT) {
+    createEnemy('suicide');
+    suicideCount += 1;
   }
 }
 
@@ -814,6 +850,34 @@ function updateEnemies(delta) {
           enemy.userData.attackCooldown = 1.15;
           if (health <= 0 && !gameOver) endGame();
         }
+      }
+    } else if (enemy.userData.isSuicide) {
+      const rush = toPlayer.clone().multiplyScalar(enemy.userData.speed * delta);
+      const orbit = new THREE.Vector3(-toPlayer.z, 0, toPlayer.x).multiplyScalar(enemy.userData.speed * delta * 0.2);
+      const next = enemy.position.clone().add(rush).add(orbit);
+      next.x = THREE.MathUtils.clamp(next.x, -worldLimit, worldLimit);
+      next.z = THREE.MathUtils.clamp(next.z, -worldLimit, worldLimit);
+      enemy.position.x = next.x;
+      enemy.position.z = next.z;
+
+      if (dist < player.radius + enemy.userData.collisionRadius + 0.35) {
+        const boom = new THREE.Mesh(
+          new THREE.SphereGeometry(1.1, 14, 14),
+          new THREE.MeshBasicMaterial({ color: 0xfb923c, transparent: true, opacity: 0.52 })
+        );
+        boom.position.copy(enemy.position);
+        scene.add(boom);
+        setTimeout(() => scene.remove(boom), 120);
+
+        if (damageCooldown <= 0) {
+          health -= 28;
+          damageCooldown = 0.4;
+          if (health <= 0 && !gameOver) endGame();
+        }
+
+        enemyPool.remove(enemy);
+        enemies.splice(enemies.indexOf(enemy), 1);
+        continue;
       }
     } else if (enemy.userData.isFlying) {
       const circling = new THREE.Vector3(-toPlayer.z, 0, toPlayer.x).multiplyScalar(enemy.userData.speed * delta * 0.65);
@@ -874,7 +938,7 @@ function updateEnemies(delta) {
     }
 
     enemy.lookAt(player.position.x, enemy.position.y, player.position.z);
-    enemy.userData.coreMaterial?.emissive.lerp(new THREE.Color(enemy.userData.isBoss ? 0x1a103f : enemy.userData.isFlying ? 0x042f2e : enemy.userData.isRanged ? 0x061634 : 0x2d0707), 0.08);
+    enemy.userData.coreMaterial?.emissive.lerp(new THREE.Color(enemy.userData.isBoss ? 0x1a103f : enemy.userData.isSuicide ? 0x3a1200 : enemy.userData.isFlying ? 0x042f2e : enemy.userData.isRanged ? 0x061634 : 0x2d0707), 0.08);
   }
 
   separateEnemies();
