@@ -647,6 +647,7 @@ function explodeBomb(position, weapon) {
 function updateBullets(delta) {
   for (let i = bullets.length - 1; i >= 0; i -= 1) {
     const bullet = bullets[i];
+    const isBomb = bullet.userData.weaponKey === 'bomb';
     bullet.position.addScaledVector(bullet.userData.velocity, delta);
     bullet.userData.life -= delta;
 
@@ -661,9 +662,13 @@ function updateBullets(delta) {
       );
     });
 
+    const hitGround = bullet.position.y <= 0;
     const outOfBounds = Math.abs(bullet.position.x) > 80 || Math.abs(bullet.position.z) > 80;
-    if (bullet.userData.life <= 0 || hitStructure || outOfBounds) {
-      if (bullet.userData.weaponKey === 'bomb') explodeBomb(bullet.position, weapons.bomb);
+    if (bullet.userData.life <= 0 || hitStructure || hitGround || outOfBounds) {
+      if (isBomb) {
+        if (hitGround) bullet.position.y = 0;
+        explodeBomb(bullet.position, weapons.bomb);
+      }
       scene.remove(bullet);
       bullets.splice(i, 1);
     }
