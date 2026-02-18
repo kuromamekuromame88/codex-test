@@ -79,11 +79,11 @@ const buildingColors = [0xdbeafe, 0xbfdbfe, 0xc4b5fd, 0xddd6fe, 0xfef3c7];
 const jumpPlatformColor = 0xf4a261;
 [
   { x: -10, z: 14, w: 3.2, h: 1.2, d: 3.2 },
-  { x: -5.5, z: 14, w: 3.2, h: 2.1, d: 3.2 },
-  { x: -1, z: 14, w: 3.2, h: 3.1, d: 3.2 },
-  { x: 3.5, z: 14, w: 3.2, h: 4.1, d: 3.2 },
-  { x: 8, z: 14, w: 3.2, h: 5, d: 3.2 },
-  { x: 12.5, z: 14, w: 3.2, h: 6.1, d: 3.2 }
+  { x: -5.5, z: 14, w: 3.2, h: 2.4, d: 3.2 },
+  { x: -1, z: 14, w: 3.2, h: 3.6, d: 3.2 },
+  { x: 3.5, z: 14, w: 3.2, h: 4.8, d: 3.2 },
+  { x: 8, z: 14, w: 3.2, h: 6.0, d: 3.2 },
+  { x: 12.5, z: 14, w: 3.2, h: 7.2, d: 3.2 }
 ].forEach((platform) => {
   addBoxStructure({ ...platform, y: platform.h / 2, color: jumpPlatformColor });
 });
@@ -127,7 +127,7 @@ const player = {
   shootCooldown: 0.14,
   radius: 0.8,
   eyeHeight: 1.7,
-  jumpSpeed: 8.8,
+  jumpSpeed: 9.8,
   position: new THREE.Vector3(0, 1.7, 8)
 };
 
@@ -279,7 +279,7 @@ function applyGamepad(delta, now) {
   const forward = getForwardVector();
   const right = new THREE.Vector3(forward.z, 0, -forward.x);
   velocity.addScaledVector(forward, -ly * player.moveSpeed * delta);
-  velocity.addScaledVector(right, lx * player.moveSpeed * delta);
+  velocity.addScaledVector(right, -lx * player.moveSpeed * delta);
 
   const shootPressed = pad.buttons[7]?.value > 0.5 || pad.buttons[5]?.pressed;
   if (shootPressed) {
@@ -333,7 +333,12 @@ function updateVertical(delta) {
 }
 
 function resolvePlayerVsStructures() {
+  const feetY = player.position.y - player.eyeHeight;
+
   for (const structure of structures) {
+    const top = structure.position.y + structure.geometry.parameters.height / 2;
+    if (feetY >= top - 0.05) continue;
+
     const halfW = structure.geometry.parameters.width / 2 + player.radius;
     const halfD = structure.geometry.parameters.depth / 2 + player.radius;
     const dx = player.position.x - structure.position.x;
