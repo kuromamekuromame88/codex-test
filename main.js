@@ -76,6 +76,18 @@ const buildingColors = [0xdbeafe, 0xbfdbfe, 0xc4b5fd, 0xddd6fe, 0xfef3c7];
   addBoxStructure({ x, y: h / 2, z, w, h, d, color });
 });
 
+const jumpPlatformColor = 0xf4a261;
+[
+  { x: -10, z: 14, w: 3.2, h: 1.2, d: 3.2 },
+  { x: -5.5, z: 14, w: 3.2, h: 2.1, d: 3.2 },
+  { x: -1, z: 14, w: 3.2, h: 3.1, d: 3.2 },
+  { x: 3.5, z: 14, w: 3.2, h: 4.1, d: 3.2 },
+  { x: 8, z: 14, w: 3.2, h: 5, d: 3.2 },
+  { x: 12.5, z: 14, w: 3.2, h: 6.1, d: 3.2 }
+].forEach((platform) => {
+  addBoxStructure({ ...platform, y: platform.h / 2, color: jumpPlatformColor });
+});
+
 const scoreEl = document.getElementById('score');
 const healthEl = document.getElementById('health');
 const enemyCountEl = document.getElementById('enemy-count');
