@@ -241,13 +241,16 @@ function pickRangedSpawnPosition() {
 function createEnemy(kind = 'melee') {
   const isRanged = kind === 'ranged';
   const isBoss = kind === 'boss';
+  const isFlying = kind === 'flying';
   const enemy = new THREE.Group();
 
   const palette = isBoss
     ? { body: 0x7c3aed, detail: 0xc4b5fd, emissive: 0x1a103f }
-    : isRanged
-      ? { body: 0x3b82f6, detail: 0x93c5fd, emissive: 0x061634 }
-      : { body: 0xb91c1c, detail: 0xf87171, emissive: 0x2d0707 };
+    : isFlying
+      ? { body: 0x0f766e, detail: 0xa7f3d0, emissive: 0x042f2e }
+      : isRanged
+        ? { body: 0x3b82f6, detail: 0x93c5fd, emissive: 0x061634 }
+        : { body: 0xb91c1c, detail: 0xf87171, emissive: 0x2d0707 };
 
   const bodyMaterial = new THREE.MeshStandardMaterial({
     color: palette.body,
@@ -278,7 +281,7 @@ function createEnemy(kind = 'melee') {
   const visor = new THREE.Mesh(
     new THREE.BoxGeometry(0.42, 0.16, 0.36),
     new THREE.MeshStandardMaterial({
-      color: isBoss ? 0xe9d5ff : isRanged ? 0xbfdbfe : 0xfee2e2,
+      color: isBoss ? 0xe9d5ff : isFlying ? 0xccfbf1 : isRanged ? 0xbfdbfe : 0xfee2e2,
       emissive: 0x111111,
       roughness: 0.3,
       metalness: 0.45
@@ -295,6 +298,15 @@ function createEnemy(kind = 'melee') {
     enemy.scale.setScalar(1.9);
   }
 
+  if (isFlying) {
+    const rotorRing = new THREE.Mesh(new THREE.TorusGeometry(0.65, 0.08, 8, 24), detailMaterial);
+    rotorRing.rotation.x = Math.PI / 2;
+    rotorRing.position.y = 2.46;
+    const core = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 12), bodyMaterial);
+    core.position.y = 2.46;
+    enemy.add(rotorRing, core);
+  }
+
   enemy.traverse((child) => {
     if (child.isMesh) {
       child.castShadow = true;
@@ -303,19 +315,26 @@ function createEnemy(kind = 'melee') {
     }
   });
 
-  const spawn = isBoss ? randomSpawnPosition(24) : isRanged ? pickRangedSpawnPosition() : randomSpawnPosition();
+  const spawn = isBoss
+    ? randomSpawnPosition(24)
+    : isFlying
+      ? randomSpawnPosition(20)
+      : isRanged
+        ? pickRangedSpawnPosition()
+        : randomSpawnPosition();
   enemy.position.copy(spawn);
   enemy.userData = {
-    speed: isBoss ? 1.9 + Math.random() * 0.7 : isRanged ? 2.2 + Math.random() * 1.2 : 2.6 + Math.random() * 1.7,
-    hp: isBoss ? 26 : isRanged ? 4 : 3,
+    speed: isBoss ? 1.9 + Math.random() * 0.7 : isFlying ? 2.8 + Math.random() * 1.4 : isRanged ? 2.2 + Math.random() * 1.2 : 2.6 + Math.random() * 1.7,
+    hp: isBoss ? 26 : isFlying ? 6 : isRanged ? 4 : 3,
     wobble: Math.random() * Math.PI * 2,
     attackCooldown: Math.random() * 0.7,
     kind,
     isRanged,
     isBoss,
-    baseY: isBoss ? 0.15 : 0.04,
-    bobAmp: isBoss ? 0.05 : 0.08,
-    collisionRadius: isBoss ? 1.35 : 0.72,
+    isFlying,
+    baseY: isBoss ? 0.15 : isFlying ? 6.4 : 0.04,
+    bobAmp: isBoss ? 0.05 : isFlying ? 0.45 : 0.08,
+    collisionRadius: isBoss ? 1.35 : isFlying ? 0.9 : 0.72,
     coreMaterial: bodyMaterial
   };
   enemyPool.add(enemy);
@@ -326,9 +345,11 @@ function createEnemy(kind = 'melee') {
 const MELEE_ENEMY_COUNT = 14;
 const RANGED_ENEMY_COUNT = 2;
 const BOSS_ENEMY_COUNT = 1;
+const FLYING_ENEMY_COUNT = 2;
 for (let i = 0; i < MELEE_ENEMY_COUNT; i += 1) createEnemy('melee');
 for (let i = 0; i < RANGED_ENEMY_COUNT; i += 1) createEnemy('ranged');
 for (let i = 0; i < BOSS_ENEMY_COUNT; i += 1) createEnemy('boss');
+for (let i = 0; i < FLYING_ENEMY_COUNT; i += 1) createEnemy('flying');
 
 function updateHud() {
   scoreEl.textContent = String(score);
@@ -734,8 +755,10 @@ function ensureEnemyComposition() {
   let rangedCount = 0;
   let meleeCount = 0;
   let bossCount = 0;
+  let flyingCount = 0;
   for (const enemy of enemies) {
     if (enemy.userData.isBoss) bossCount += 1;
+    else if (enemy.userData.isFlying) flyingCount += 1;
     else if (enemy.userData.isRanged) rangedCount += 1;
     else meleeCount += 1;
   }
@@ -753,6 +776,11 @@ function ensureEnemyComposition() {
   while (bossCount < BOSS_ENEMY_COUNT) {
     createEnemy('boss');
     bossCount += 1;
+  }
+
+  while (flyingCount < FLYING_ENEMY_COUNT) {
+    createEnemy('flying');
+    flyingCount += 1;
   }
 }
 
@@ -780,6 +808,28 @@ function updateEnemies(delta) {
           enemy.userData.attackCooldown = 1.15;
           if (health <= 0 && !gameOver) endGame();
         }
+      }
+    } else if (enemy.userData.isFlying) {
+      const circling = new THREE.Vector3(-toPlayer.z, 0, toPlayer.x).multiplyScalar(enemy.userData.speed * delta * 0.65);
+      const closing = toPlayer.clone().multiplyScalar(enemy.userData.speed * delta * (dist > 13 ? 0.55 : -0.25));
+      const next = enemy.position.clone().add(circling).add(closing);
+      next.x = THREE.MathUtils.clamp(next.x, -worldLimit, worldLimit);
+      next.z = THREE.MathUtils.clamp(next.z, -worldLimit, worldLimit);
+      enemy.position.x = next.x;
+      enemy.position.z = next.z;
+
+      enemy.userData.attackCooldown -= delta;
+      if (enemy.userData.attackCooldown <= 0 && dist < 30) {
+        const shotDir = player.position.clone().sub(enemy.position).normalize();
+        const enemyBullet = new THREE.Mesh(
+          new THREE.SphereGeometry(0.13, 10, 10),
+          new THREE.MeshBasicMaterial({ color: 0x5eead4 })
+        );
+        enemyBullet.position.copy(enemy.position).add(new THREE.Vector3(0, 0.15, 0)).addScaledVector(shotDir, 0.8);
+        enemyBullet.userData = { velocity: shotDir.multiplyScalar(34), life: 2.4 };
+        enemyBullets.push(enemyBullet);
+        scene.add(enemyBullet);
+        enemy.userData.attackCooldown = 0.7 + Math.random() * 0.45;
       }
     } else if (!enemy.userData.isRanged) {
       if (dist > 2.1) {
@@ -818,7 +868,7 @@ function updateEnemies(delta) {
     }
 
     enemy.lookAt(player.position.x, enemy.position.y, player.position.z);
-    enemy.userData.coreMaterial?.emissive.lerp(new THREE.Color(enemy.userData.isRanged ? 0x061634 : 0x2d0707), 0.08);
+    enemy.userData.coreMaterial?.emissive.lerp(new THREE.Color(enemy.userData.isBoss ? 0x1a103f : enemy.userData.isFlying ? 0x042f2e : enemy.userData.isRanged ? 0x061634 : 0x2d0707), 0.08);
   }
 
   separateEnemies();
