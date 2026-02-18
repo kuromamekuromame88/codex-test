@@ -440,6 +440,7 @@ document.addEventListener('keydown', (event) => {
   }
   if (event.code === 'Digit1') setWeapon('rifle');
   if (event.code === 'Digit2') setWeapon('beam');
+  if (event.code === 'Digit3') setWeapon('bomb');
 });
 document.addEventListener('keyup', (event) => keys.delete(event.code));
 
