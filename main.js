@@ -154,11 +154,23 @@ const weapons = {
     bulletSize: 0.12,
     bulletColor: 0x67e8f9,
     maxHits: 3
+  },
+  bomb: {
+    label: 'Bomb',
+    cooldown: 0.9,
+    damage: 0,
+    bulletSpeed: 42,
+    bulletLife: 1.8,
+    bulletSize: 0.2,
+    bulletColor: 0xf59e0b,
+    maxHits: 0,
+    explosionRadius: 7.8,
+    explosionDamage: 5
   }
 };
-const weaponOrder = ['rifle', 'beam'];
+const weaponOrder = ['rifle', 'beam', 'bomb'];
 let currentWeapon = 'rifle';
-const lastShotByWeapon = { rifle: 0, beam: 0 };
+const lastShotByWeapon = { rifle: 0, beam: 0, bomb: 0 };
 
 const worldLimit = 58;
 const player = {
@@ -226,12 +238,16 @@ function pickRangedSpawnPosition() {
   return randomSpawnPosition(16);
 }
 
-function createEnemy(isRanged = false) {
+function createEnemy(kind = 'melee') {
+  const isRanged = kind === 'ranged';
+  const isBoss = kind === 'boss';
   const enemy = new THREE.Group();
 
-  const palette = isRanged
-    ? { body: 0x3b82f6, detail: 0x93c5fd, emissive: 0x061634 }
-    : { body: 0xb91c1c, detail: 0xf87171, emissive: 0x2d0707 };
+  const palette = isBoss
+    ? { body: 0x7c3aed, detail: 0xc4b5fd, emissive: 0x1a103f }
+    : isRanged
+      ? { body: 0x3b82f6, detail: 0x93c5fd, emissive: 0x061634 }
+      : { body: 0xb91c1c, detail: 0xf87171, emissive: 0x2d0707 };
 
   const bodyMaterial = new THREE.MeshStandardMaterial({
     color: palette.body,
@@ -247,31 +263,38 @@ function createEnemy(isRanged = false) {
 
   const torso = new THREE.Mesh(new THREE.BoxGeometry(0.95, 1.1, 0.5), bodyMaterial);
   torso.position.y = 1.35;
-
   const head = new THREE.Mesh(new THREE.SphereGeometry(0.34, 20, 20), detailMaterial);
   head.position.y = 2.18;
-
   const leftArm = new THREE.Mesh(new THREE.CapsuleGeometry(0.12, 0.55, 4, 10), detailMaterial);
   leftArm.position.set(-0.62, 1.38, 0);
   leftArm.rotation.z = Math.PI / 18;
-
   const rightArm = leftArm.clone();
   rightArm.position.x = 0.62;
   rightArm.rotation.z = -Math.PI / 18;
-
   const leftLeg = new THREE.Mesh(new THREE.CapsuleGeometry(0.15, 0.65, 4, 10), detailMaterial);
   leftLeg.position.set(-0.24, 0.56, 0);
-
   const rightLeg = leftLeg.clone();
   rightLeg.position.x = 0.24;
-
   const visor = new THREE.Mesh(
     new THREE.BoxGeometry(0.42, 0.16, 0.36),
-    new THREE.MeshStandardMaterial({ color: isRanged ? 0xbfdbfe : 0xfee2e2, emissive: 0x111111, roughness: 0.3, metalness: 0.45 })
+    new THREE.MeshStandardMaterial({
+      color: isBoss ? 0xe9d5ff : isRanged ? 0xbfdbfe : 0xfee2e2,
+      emissive: 0x111111,
+      roughness: 0.3,
+      metalness: 0.45
+    })
   );
   visor.position.set(0, 2.16, 0.18);
 
   enemy.add(torso, head, leftArm, rightArm, leftLeg, rightLeg, visor);
+
+  if (isBoss) {
+    const shoulder = new THREE.Mesh(new THREE.BoxGeometry(1.55, 0.36, 0.65), detailMaterial);
+    shoulder.position.set(0, 1.78, 0);
+    enemy.add(shoulder);
+    enemy.scale.setScalar(1.9);
+  }
+
   enemy.traverse((child) => {
     if (child.isMesh) {
       child.castShadow = true;
@@ -280,13 +303,19 @@ function createEnemy(isRanged = false) {
     }
   });
 
-  enemy.position.copy(isRanged ? pickRangedSpawnPosition() : randomSpawnPosition());
+  const spawn = isBoss ? randomSpawnPosition(24) : isRanged ? pickRangedSpawnPosition() : randomSpawnPosition();
+  enemy.position.copy(spawn);
   enemy.userData = {
-    speed: isRanged ? 2.2 + Math.random() * 1.2 : 2.6 + Math.random() * 1.7,
-    hp: isRanged ? 4 : 3,
+    speed: isBoss ? 1.9 + Math.random() * 0.7 : isRanged ? 2.2 + Math.random() * 1.2 : 2.6 + Math.random() * 1.7,
+    hp: isBoss ? 26 : isRanged ? 4 : 3,
     wobble: Math.random() * Math.PI * 2,
     attackCooldown: Math.random() * 0.7,
+    kind,
     isRanged,
+    isBoss,
+    baseY: isBoss ? 0.15 : 0.04,
+    bobAmp: isBoss ? 0.05 : 0.08,
+    collisionRadius: isBoss ? 1.35 : 0.72,
     coreMaterial: bodyMaterial
   };
   enemyPool.add(enemy);
@@ -296,8 +325,10 @@ function createEnemy(isRanged = false) {
 
 const MELEE_ENEMY_COUNT = 14;
 const RANGED_ENEMY_COUNT = 2;
-for (let i = 0; i < MELEE_ENEMY_COUNT; i += 1) createEnemy();
-for (let i = 0; i < RANGED_ENEMY_COUNT; i += 1) createEnemy(true);
+const BOSS_ENEMY_COUNT = 1;
+for (let i = 0; i < MELEE_ENEMY_COUNT; i += 1) createEnemy('melee');
+for (let i = 0; i < RANGED_ENEMY_COUNT; i += 1) createEnemy('ranged');
+for (let i = 0; i < BOSS_ENEMY_COUNT; i += 1) createEnemy('boss');
 
 function updateHud() {
   scoreEl.textContent = String(score);
@@ -334,7 +365,7 @@ function damageEnemy(enemy, damage) {
     score += 10;
     enemyPool.remove(enemy);
     enemies.splice(enemies.indexOf(enemy), 1);
-    createEnemy(Boolean(enemy.userData.isRanged));
+    createEnemy(enemy.userData.kind || (enemy.userData.isRanged ? "ranged" : "melee"));
   }
 }
 
@@ -350,7 +381,7 @@ function spawnBullet(now, weapon) {
     new THREE.MeshBasicMaterial({ color: weapon.bulletColor })
   );
   bullet.position.copy(camera.position).addScaledVector(direction, 0.75);
-  bullet.userData = { velocity: direction.clone().multiplyScalar(weapon.bulletSpeed), life: weapon.bulletLife };
+  bullet.userData = { velocity: direction.clone().multiplyScalar(weapon.bulletSpeed), life: weapon.bulletLife, weaponKey: currentWeapon };
   bullets.push(bullet);
   scene.add(bullet);
   return true;
@@ -360,6 +391,8 @@ function handleShoot(weapon) {
   raycaster.setFromCamera(pointer, camera);
   const hits = raycaster.intersectObjects(enemies, true);
   if (!hits.length) return;
+
+  if (weapon.maxHits === 0) return;
 
   const maxHits = Math.max(1, weapon.maxHits || 1);
   const affected = new Set();
@@ -570,6 +603,25 @@ function updateMovement(delta) {
   camera.rotation.set(pitch, yaw, 0, 'YXZ');
 }
 
+function explodeBomb(position, weapon) {
+  const flash = new THREE.Mesh(
+    new THREE.SphereGeometry(weapon.explosionRadius * 0.32, 16, 16),
+    new THREE.MeshBasicMaterial({ color: 0xfbbf24, transparent: true, opacity: 0.5 })
+  );
+  flash.position.copy(position);
+  scene.add(flash);
+  setTimeout(() => scene.remove(flash), 90);
+
+  for (const enemy of [...enemies]) {
+    const dist = enemy.position.distanceTo(position);
+    if (dist <= weapon.explosionRadius) {
+      const falloff = 1 - dist / weapon.explosionRadius;
+      const damage = Math.max(1, Math.round(weapon.explosionDamage * falloff));
+      damageEnemy(enemy, damage);
+    }
+  }
+}
+
 function updateBullets(delta) {
   for (let i = bullets.length - 1; i >= 0; i -= 1) {
     const bullet = bullets[i];
@@ -587,7 +639,9 @@ function updateBullets(delta) {
       );
     });
 
-    if (bullet.userData.life <= 0 || hitStructure || Math.abs(bullet.position.x) > 80 || Math.abs(bullet.position.z) > 80) {
+    const outOfBounds = Math.abs(bullet.position.x) > 80 || Math.abs(bullet.position.z) > 80;
+    if (bullet.userData.life <= 0 || hitStructure || outOfBounds) {
+      if (bullet.userData.weaponKey === 'bomb') explodeBomb(bullet.position, weapons.bomb);
       scene.remove(bullet);
       bullets.splice(i, 1);
     }
@@ -656,7 +710,7 @@ function moveEnemyWithCollision(enemy, movement) {
   proposed.x = THREE.MathUtils.clamp(proposed.x, -worldLimit, worldLimit);
   proposed.z = THREE.MathUtils.clamp(proposed.z, -worldLimit, worldLimit);
 
-  const enemyRadius = 0.72;
+  const enemyRadius = enemy.userData.collisionRadius || 0.72;
 
   for (const structure of structures) {
     const halfW = structure.geometry.parameters.width / 2 + enemyRadius;
@@ -679,19 +733,26 @@ function moveEnemyWithCollision(enemy, movement) {
 function ensureEnemyComposition() {
   let rangedCount = 0;
   let meleeCount = 0;
+  let bossCount = 0;
   for (const enemy of enemies) {
-    if (enemy.userData.isRanged) rangedCount += 1;
+    if (enemy.userData.isBoss) bossCount += 1;
+    else if (enemy.userData.isRanged) rangedCount += 1;
     else meleeCount += 1;
   }
 
   while (rangedCount < RANGED_ENEMY_COUNT) {
-    createEnemy(true);
+    createEnemy('ranged');
     rangedCount += 1;
   }
 
   while (meleeCount < MELEE_ENEMY_COUNT) {
-    createEnemy(false);
+    createEnemy('melee');
     meleeCount += 1;
+  }
+
+  while (bossCount < BOSS_ENEMY_COUNT) {
+    createEnemy('boss');
+    bossCount += 1;
   }
 }
 
@@ -703,11 +764,24 @@ function updateEnemies(delta) {
     const dist = toPlayer.length();
 
     enemy.userData.wobble += delta * 6;
-    enemy.position.y = 0.04 + Math.sin(enemy.userData.wobble) * 0.08;
+    enemy.position.y = enemy.userData.baseY + Math.sin(enemy.userData.wobble) * enemy.userData.bobAmp;
 
     toPlayer.normalize();
 
-    if (!enemy.userData.isRanged) {
+    if (enemy.userData.isBoss) {
+      if (dist > 3.1) {
+        const movement = toPlayer.clone().multiplyScalar(enemy.userData.speed * delta);
+        moveEnemyWithCollision(enemy, movement);
+      } else {
+        enemy.userData.attackCooldown -= delta;
+        if (enemy.userData.attackCooldown <= 0 && damageCooldown <= 0) {
+          health -= 35;
+          damageCooldown = 0.5;
+          enemy.userData.attackCooldown = 1.15;
+          if (health <= 0 && !gameOver) endGame();
+        }
+      }
+    } else if (!enemy.userData.isRanged) {
       if (dist > 2.1) {
         const movement = toPlayer.clone().multiplyScalar(enemy.userData.speed * delta);
         moveEnemyWithCollision(enemy, movement);
